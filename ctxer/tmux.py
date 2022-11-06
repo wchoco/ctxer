@@ -151,7 +151,7 @@ class CTXer:
     def __init__(self, now: T.Optional[Pane] = None):
         if now is None:
             window, pane, tty = TmuxCommand.get_active_pane()
-            now = Pane(window, pane, tty, is_main=True)
+            now = Pane(window, pane, tty, is_main=True, clearing=False)
             __panes__.append(now)
         self.now = now
 
@@ -285,15 +285,14 @@ class PaneCommand(gdb.Command):
             "direct", choices=["above", "below", "left", "right"], default="below"
         )
 
-        p_gdb = sp.add_parser("gdb")
-        p_gdb.set_defaults(func=self.set_gdbcommand)
+        p_gdb = sp.add_parser("set")
+        p_gdb.set_defaults(func=self.set_command)
         p_gdb.add_argument("pane")
         p_gdb.add_argument("command", nargs=argparse.REMAINDER)
 
-        p_ex = sp.add_parser("ex")
-        p_ex.set_defaults(func=self.set_excommand)
-        p_ex.add_argument("pane")
-        p_ex.add_argument("command", nargs=argparse.REMAINDER)
+        p_gdb = sp.add_parser("unset")
+        p_gdb.set_defaults(func=self.unset_command)
+        p_gdb.add_argument("pane")
 
         try:
             args = parser.parse_args(arg.split(" "))
@@ -311,13 +310,17 @@ class PaneCommand(gdb.Command):
         }
         split_func[args.direct]()
 
-    def set_gdbcommand(self, args: argparse.Namespace):
+    def set_command(self, args: argparse.Namespace):
         pane = __ctxer__.select(pane=args.pane)
-        pane.now.action = GdbCommandAction(" ".join(args.command))
+        cmd = " ".join(args.command)
+        if cmd.startswith("!"):
+            pane.now.action = ExternalCommandAction(cmd[1:])
+        else:
+            pane.now.action = GdbCommandAction(cmd)
 
-    def set_excommand(self, args: argparse.Namespace):
+    def unset_command(self, args: argparse.Namespace):
         pane = __ctxer__.select(pane=args.pane)
-        pane.now.action = ExternalCommandAction(" ".join(args.command))
+        pane.now.action = None
 
 
 PaneCommand()

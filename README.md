@@ -16,7 +16,7 @@ python
 import ctxer
 main = ctxer.CTXer()
 main.right(gdbcmd="ctx")
-main.above(cmd="ipython3", percentage=30)
+main.above(cmd="ipython3", size="30%").above(excmd="date", size="1")
 main.build()
 end
 ```
