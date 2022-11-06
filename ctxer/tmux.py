@@ -84,33 +84,37 @@ class Pane:
         self.clearing = clearing
         self.action = action
 
-    def split_above(self, cmd: T.Optional[str] = None, percentage: int = 50):
+    def split_above(self, cmd: T.Optional[str] = None, size: str = "50%"):
+        size_opt = f"-p {size[:-1]}" if size[-1] == "%" else f"-l {size}"
         window, pane, tty = TmuxCommand.split_pane(
             pane=self.pane,
             window=self.window,
             cmd=cmd,
-            options=f"-v -b -p {percentage}",
+            options=f"-v -b {size_opt}",
         )
         return Pane(window, pane, tty)
 
-    def split_below(self, cmd: T.Optional[str] = None, percentage: int = 50):
+    def split_below(self, cmd: T.Optional[str] = None, size: str = "50%"):
+        size_opt = f"-p {size[:-1]}" if size[-1] == "%" else f"-l {size}"
         window, pane, tty = TmuxCommand.split_pane(
-            pane=self.pane, window=self.window, cmd=cmd, options=f"-v -p {percentage}"
+            pane=self.pane, window=self.window, cmd=cmd, options=f"-v {size_opt}"
         )
         return Pane(window, pane, tty)
 
-    def split_left(self, cmd: T.Optional[str] = None, percentage: int = 50):
+    def split_left(self, cmd: T.Optional[str] = None, size: str = "50%"):
+        size_opt = f"-p {size[:-1]}" if size[-1] == "%" else f"-l {size}"
         window, pane, tty = TmuxCommand.split_pane(
             pane=self.pane,
             window=self.window,
             cmd=cmd,
-            options=f"-h -b -p {percentage}",
+            options=f"-h -b {size_opt}",
         )
         return Pane(window, pane, tty)
 
-    def split_right(self, cmd: T.Optional[str] = None, percentage: int = 50):
+    def split_right(self, cmd: T.Optional[str] = None, size: str = "50%"):
+        size_opt = f"-p {size[:-1]}" if size[-1] == "%" else f"-l {size}"
         window, pane, tty = TmuxCommand.split_pane(
-            pane=self.pane, window=self.window, cmd=cmd, options=f"-h -p {percentage}"
+            pane=self.pane, window=self.window, cmd=cmd, options=f"-h {size_opt}"
         )
         return Pane(window, pane, tty)
 
@@ -165,7 +169,7 @@ class CTXer:
         gdbcmd: T.Optional[str] = None,
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
-        percentage: int = 50,
+        size: str = "50%",
     ) -> CTXer:
         if pane is None:
             pane = self.now
@@ -183,7 +187,7 @@ class CTXer:
             "left": pane.split_left,
             "right": pane.split_right,
         }
-        new_pane = split_func[direct](cmd=cmd, percentage=percentage)
+        new_pane = split_func[direct](cmd=cmd, size=size)
         new_pane.action = action
         __panes__.append(new_pane)
         return CTXer(new_pane)
@@ -194,9 +198,9 @@ class CTXer:
         gdbcmd: T.Optional[str] = None,
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
-        percentage: int = 50,
+        size: str = "50%",
     ) -> CTXer:
-        return self.split("above", pane, gdbcmd, excmd, cmd, percentage)
+        return self.split("above", pane, gdbcmd, excmd, cmd, size)
 
     def below(
         self,
@@ -204,9 +208,9 @@ class CTXer:
         gdbcmd: T.Optional[str] = None,
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
-        percentage: int = 50,
+        size: str = "50%",
     ) -> Pane:
-        return self.split("below", pane, gdbcmd, excmd, cmd, percentage)
+        return self.split("below", pane, gdbcmd, excmd, cmd, size)
 
     def left(
         self,
@@ -214,9 +218,9 @@ class CTXer:
         gdbcmd: T.Optional[str] = None,
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
-        percentage: int = 50,
+        size: str = "50%",
     ) -> CTXer:
-        return self.split("left", pane, gdbcmd, excmd, cmd, percentage)
+        return self.split("left", pane, gdbcmd, excmd, cmd, size)
 
     def right(
         self,
@@ -224,9 +228,9 @@ class CTXer:
         gdbcmd: T.Optional[str] = None,
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
-        percentage: int = 50,
+        size: str = "50%",
     ) -> CTXer:
-        return self.split("right", pane, gdbcmd, excmd, cmd, percentage)
+        return self.split("right", pane, gdbcmd, excmd, cmd, size)
 
     def update(self, event):
         for pane in __panes__:
