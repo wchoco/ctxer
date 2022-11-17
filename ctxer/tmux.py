@@ -254,7 +254,7 @@ class CTXer:
         global __ctxer__
         __ctxer__ = self
         gdb.events.stop.connect(__ctxer__.update)
-        gdb.events.exited.connect(__ctxer__.clean)
+        gdb.events.gdb_exiting.connect(__ctxer__.clean)
 
 
 class PaneCommand(gdb.Command):
