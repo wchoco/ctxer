@@ -45,6 +45,11 @@ class TmuxCommand:
         cls._run_command(cmd)
 
     @classmethod
+    def show_panes(cls):
+        cmd = "tmux display-panes"
+        cls._run_command(cmd)
+
+    @classmethod
     def get_tty(cls, pane: T.Optional[str] = None) -> str:
         if pane is not None:
             target = f" -t {pane}"
@@ -274,14 +279,14 @@ class PaneCommand(gdb.Command):
             raise ValueError(f"CTXer is not used")
         parser, args = self.get_args(arg)
         if args is None or args.sp is None:
-            parser.print_usage()
+            TmuxCommand.show_panes()
         else:
             args.func(args)
 
     def get_args(
         self, arg: str
     ) -> T.Tuple[argparse.ArgumentParser, T.Optional[argparse.Namespace]]:
-        parser = argparse.ArgumentParser()
+        parser = argparse.ArgumentParser(exit_on_error=False)
         sp = parser.add_subparsers(dest="sp")
 
         p_add = sp.add_parser("add")
@@ -291,7 +296,7 @@ class PaneCommand(gdb.Command):
             choices=["above", "below", "left", "right", "k", "j", "h", "l"],
             default="below",
         )
-        p_add.add_argument("pane", nargs="?", default=None)
+        p_add.add_argument("pane", nargs="?")
 
         p_gdb = sp.add_parser("set")
         p_gdb.set_defaults(func=self.set_command)
