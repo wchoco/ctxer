@@ -5,8 +5,8 @@ import os
 import subprocess
 import typing as T
 
-__ctxer__ = None
-__panes__ = []
+__ctxer__: T.Optional[CTXer] = None
+__panes__: T.List[Pane] = []
 
 
 class TmuxCommand:
@@ -32,7 +32,8 @@ class TmuxCommand:
         cmd_ += "" if options is None else f" {options}"
         cmd_ += target
         cmd_ += " cat -" if cmd is None else f" {cmd}"
-        return cls._run_command(cmd_).split(":")
+        window_id, pane_id, pane_tty = cls._run_command(cmd_).split(":")
+        return window_id, pane_id, pane_tty
 
     @classmethod
     def close_pane(cls, pane: str):
@@ -55,7 +56,8 @@ class TmuxCommand:
     @classmethod
     def get_active_pane(cls) -> T.Tuple[str, str, str]:
         cmd = "tmux display -p -F #{window_id}:#{pane_id}:#{pane_tty}"
-        return cls._run_command(cmd).split(":")
+        window_id, pane_id, pane_tty = cls._run_command(cmd).split(":")
+        return window_id, pane_id, pane_tty
 
     @classmethod
     def get_pane_idx(cls) -> T.Dict[str, str]:
@@ -75,7 +77,7 @@ class Pane:
         tty: T.Optional[str] = None,
         is_main: bool = False,
         clearing: bool = True,
-        action: Action = None,
+        action: T.Optional[Action] = None,
     ):
         self.window = window
         self.pane = pane
@@ -133,7 +135,7 @@ class GdbCommandAction(Action):
         self.cmd = cmd
 
     def do(self) -> str:
-        return gdb.execute(self.cmd, to_string=True)
+        return gdb.execute(self.cmd, to_string=True) or ""
 
 
 class ExternalCommandAction(Action):
@@ -159,8 +161,8 @@ class CTXer:
         if window is None:
             window = TmuxCommand.get_active_pane()[0]
         panes = TmuxCommand.get_pane_idx()
-        pane = [p for p in __panes__ if p.window == window and p.pane == panes[pane]][0]
-        return CTXer(pane)
+        p = [p for p in __panes__ if p.window == window and p.pane == panes[pane]][0]
+        return CTXer(p)
 
     def split(
         self,
@@ -209,7 +211,7 @@ class CTXer:
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
         size: str = "50%",
-    ) -> Pane:
+    ) -> CTXer:
         return self.split("below", pane, gdbcmd, excmd, cmd, size)
 
     def left(
@@ -254,7 +256,7 @@ class CTXer:
         global __ctxer__
         __ctxer__ = self
         gdb.events.stop.connect(__ctxer__.update)
-        gdb.events.gdb_exiting.connect(__ctxer__.clean)
+        gdb.events.gdb_exiting.connect(__ctxer__.clean)  # type: ignore
 
 
 class PaneCommand(gdb.Command):
@@ -265,7 +267,7 @@ class PaneCommand(gdb.Command):
 
     def invoke(self, arg, from_tty):
         if __ctxer__ is None:
-            return
+            raise ValueError(f"CTXer is not used")
         parser, args = self.get_args(arg)
         if args is None or args.sp is None:
             parser.print_usage()
@@ -274,7 +276,7 @@ class PaneCommand(gdb.Command):
 
     def get_args(
         self, arg: str
-    ) -> T.Tuple[argparse.ArgumentParser, argparse.Namespace]:
+    ) -> T.Tuple[argparse.ArgumentParser, T.Optional[argparse.Namespace]]:
         parser = argparse.ArgumentParser()
         sp = parser.add_subparsers(dest="sp")
 
@@ -301,6 +303,8 @@ class PaneCommand(gdb.Command):
         return parser, args
 
     def add(self, args: argparse.Namespace):
+        if __ctxer__ is None:
+            raise ValueError(f"CTXer is not used")
         pane = __ctxer__.select(pane=args.pane)
         split_func = {
             "above": pane.above,
@@ -311,6 +315,8 @@ class PaneCommand(gdb.Command):
         split_func[args.direct]()
 
     def set_command(self, args: argparse.Namespace):
+        if __ctxer__ is None:
+            raise ValueError(f"CTXer is not used")
         pane = __ctxer__.select(pane=args.pane)
         cmd = " ".join(args.command)
         if cmd.startswith("!"):
@@ -319,6 +325,8 @@ class PaneCommand(gdb.Command):
             pane.now.action = GdbCommandAction(cmd)
 
     def unset_command(self, args: argparse.Namespace):
+        if __ctxer__ is None:
+            raise ValueError(f"CTXer is not used")
         pane = __ctxer__.select(pane=args.pane)
         pane.now.action = None
 
