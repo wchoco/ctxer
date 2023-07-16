@@ -157,11 +157,15 @@ class CTXer:
             __panes__.append(now)
         self.now = now
 
-    def select(self, pane: str, window: T.Optional[str] = None) -> CTXer:
+    def select(self, pane: T.Optional[str], window: T.Optional[str] = None) -> CTXer:
+        if pane is None:
+            pane = TmuxCommand.get_active_pane()[1]
+        else:
+            panes = TmuxCommand.get_pane_idx()
+            pane = panes[pane]
         if window is None:
             window = TmuxCommand.get_active_pane()[0]
-        panes = TmuxCommand.get_pane_idx()
-        p = [p for p in __panes__ if p.window == window and p.pane == panes[pane]][0]
+        p = [p for p in __panes__ if p.window == window and p.pane == pane][0]
         return CTXer(p)
 
     def split(
@@ -281,11 +285,13 @@ class PaneCommand(gdb.Command):
         sp = parser.add_subparsers(dest="sp")
 
         p_add = sp.add_parser("add")
-        p_add.set_defaults(func=self.add)
-        p_add.add_argument("pane")
+        p_add.set_defaults(func=self.add_pane)
         p_add.add_argument(
-            "direct", choices=["above", "below", "left", "right"], default="below"
+            "direct",
+            choices=["above", "below", "left", "right", "k", "j", "h", "l"],
+            default="below",
         )
+        p_add.add_argument("pane", nargs="?", default=None)
 
         p_gdb = sp.add_parser("set")
         p_gdb.set_defaults(func=self.set_command)
@@ -302,7 +308,7 @@ class PaneCommand(gdb.Command):
             return parser, None
         return parser, args
 
-    def add(self, args: argparse.Namespace):
+    def add_pane(self, args: argparse.Namespace):
         if __ctxer__ is None:
             raise ValueError(f"CTXer is not used")
         pane = __ctxer__.select(pane=args.pane)
@@ -311,6 +317,11 @@ class PaneCommand(gdb.Command):
             "below": pane.below,
             "left": pane.left,
             "right": pane.right,
+            # vim binding
+            "k": pane.above,
+            "j": pane.below,
+            "h": pane.left,
+            "l": pane.right,
         }
         split_func[args.direct]()
 
