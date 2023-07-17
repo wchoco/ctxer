@@ -337,7 +337,7 @@ class CTXer:
         __panes__.append(new_pane)
         return CTXer(new_pane)
 
-    def update(self, event):
+    def update(self, event=None):
         for pane in __panes__:
             if pane.action is None or pane.tty is None or not os.path.exists(pane.tty):
                 continue
@@ -346,7 +346,7 @@ class CTXer:
                 pane.clear()
             pane.write(output)
 
-    def clean(self, event):
+    def clean(self, event=None):
         global __panes__
         for pane in __panes__:
             if not pane.delete:
@@ -391,14 +391,17 @@ class PaneCommand(gdb.Command):
         )
         p_add.add_argument("pane", nargs="?")
 
-        p_gdb = sp.add_parser("set")
-        p_gdb.set_defaults(func=self.set_command)
-        p_gdb.add_argument("pane")
-        p_gdb.add_argument("command", nargs=argparse.REMAINDER)
+        p_set = sp.add_parser("set")
+        p_set.set_defaults(func=self.set_command)
+        p_set.add_argument("pane")
+        p_set.add_argument("command", nargs=argparse.REMAINDER)
 
-        p_gdb = sp.add_parser("unset")
-        p_gdb.set_defaults(func=self.unset_command)
-        p_gdb.add_argument("pane")
+        p_unset = sp.add_parser("unset")
+        p_unset.set_defaults(func=self.unset_command)
+        p_unset.add_argument("pane")
+
+        p_update = sp.add_parser("update")
+        p_update.set_defaults(func=self.update_panes)
 
         try:
             args = parser.parse_args(arg.split(" "))
@@ -432,12 +435,18 @@ class PaneCommand(gdb.Command):
             pane.now.action = ExternalCommandAction(cmd[1:])
         else:
             pane.now.action = GdbCommandAction(cmd)
+        __ctxer__.update()
 
     def unset_command(self, args: argparse.Namespace):
         if __ctxer__ is None:
             raise ValueError(f"CTXer is not used")
         pane = __ctxer__.select(pane=args.pane)
         pane.now.action = None
+
+    def update_panes(self, args: argparse.Namespace):
+        if __ctxer__ is None:
+            raise ValueError(f"CTXer is not used")
+        __ctxer__.update()
 
 
 PaneCommand()
