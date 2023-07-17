@@ -1,6 +1,6 @@
 from __future__ import annotations
+import gdb  # type: ignore
 import argparse
-import gdb
 import os
 import subprocess
 import typing as T
