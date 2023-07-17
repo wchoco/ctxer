@@ -15,6 +15,42 @@ class TmuxCommand:
         p = subprocess.run(cmd.split(" "), capture_output=True)
         return p.stdout.strip().decode()
 
+    @staticmethod
+    def run_at(pane: Pane, cmd: str) -> None:
+        cmd_ = f'tmux send-keys -t {pane.pane} "{cmd}" Enter'
+        subprocess.run(cmd_.split(" "))
+
+    @classmethod
+    def get_session(
+        cls,
+        session: T.Optional[str],
+        cmd: T.Optional[str] = None,
+        options: T.Optional[str] = None,
+        delete: bool = True,
+        title: T.Optional[str] = None,
+    ) -> Pane:
+        # get exists sessions
+        cmd_ = (
+            "tmux list-sessions -F #{session_name}:#{window_id}:#{pane_id}:#{pane_tty}"
+        )
+        for line in cls._run_command(cmd_).strip().split("\n"):
+            session_name, window_id, pane_id, pane_tty = line.split(":")
+            if session == session_name:
+                new_pane = Pane(
+                    window_id, pane_id, pane_tty, delete=delete, title=title
+                )
+                new_pane.clear()
+                return new_pane
+
+        # create session
+        cmd_ = "tmux new-session -P -d -F #{window_id}:#{pane_id}:#{pane_tty}"
+        cmd_ += "" if options is None else f" {options}"
+        cmd_ += "" if session is None else f" -s {session}"
+        cmd_ += " cat -" if cmd is None else f" {cmd}"
+        window_id, pane_id, pane_tty = cls._run_command(cmd_).split(":")
+        new_pane = Pane(window_id, pane_id, pane_tty, delete=delete, title=title)
+        return new_pane
+
     @classmethod
     def split_pane(
         cls,
@@ -22,7 +58,8 @@ class TmuxCommand:
         window: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
         options: T.Optional[str] = None,
-    ) -> T.Tuple[str, str, str]:
+        title: T.Optional[str] = None,
+    ) -> Pane:
         if pane is not None:
             target = f" -t {pane}" if window is None else f" -t {pane}"
         else:
@@ -33,7 +70,8 @@ class TmuxCommand:
         cmd_ += target
         cmd_ += " cat -" if cmd is None else f" {cmd}"
         window_id, pane_id, pane_tty = cls._run_command(cmd_).split(":")
-        return window_id, pane_id, pane_tty
+        new_pane = Pane(window_id, pane_id, pane_tty, title=title)
+        return new_pane
 
     @classmethod
     def close_pane(cls, pane: str):
@@ -80,50 +118,72 @@ class Pane:
         window: str,
         pane: str,
         tty: T.Optional[str] = None,
-        is_main: bool = False,
         clearing: bool = True,
         action: T.Optional[Action] = None,
+        delete: bool = True,
+        title: T.Optional[str] = None,
     ):
         self.window = window
         self.pane = pane
         self.tty = tty
-        self.is_main = is_main
         self.clearing = clearing
         self.action = action
+        self.delete = delete
+        self.title = title
 
-    def split_above(self, cmd: T.Optional[str] = None, size: str = "50%"):
+        if title is not None:
+            self.set_title(title)
+
+    def split_above(self, cmd: T.Optional[str] = None, size: str = "50%", **kwargs):
         size_opt = f"-p {size[:-1]}" if size[-1] == "%" else f"-l {size}"
-        window, pane, tty = TmuxCommand.split_pane(
+        return TmuxCommand.split_pane(
             pane=self.pane,
             window=self.window,
             cmd=cmd,
             options=f"-v -b {size_opt}",
+            **kwargs,
         )
-        return Pane(window, pane, tty)
 
-    def split_below(self, cmd: T.Optional[str] = None, size: str = "50%"):
+    def split_below(self, cmd: T.Optional[str] = None, size: str = "50%", **kwargs):
         size_opt = f"-p {size[:-1]}" if size[-1] == "%" else f"-l {size}"
-        window, pane, tty = TmuxCommand.split_pane(
-            pane=self.pane, window=self.window, cmd=cmd, options=f"-v {size_opt}"
+        return TmuxCommand.split_pane(
+            pane=self.pane,
+            window=self.window,
+            cmd=cmd,
+            options=f"-v {size_opt}",
+            **kwargs,
         )
-        return Pane(window, pane, tty)
 
-    def split_left(self, cmd: T.Optional[str] = None, size: str = "50%"):
+    def split_left(self, cmd: T.Optional[str] = None, size: str = "50%", **kwargs):
         size_opt = f"-p {size[:-1]}" if size[-1] == "%" else f"-l {size}"
-        window, pane, tty = TmuxCommand.split_pane(
+        return TmuxCommand.split_pane(
             pane=self.pane,
             window=self.window,
             cmd=cmd,
             options=f"-h -b {size_opt}",
+            **kwargs,
         )
-        return Pane(window, pane, tty)
 
-    def split_right(self, cmd: T.Optional[str] = None, size: str = "50%"):
+    def split_right(self, cmd: T.Optional[str] = None, size: str = "50%", **kwargs):
         size_opt = f"-p {size[:-1]}" if size[-1] == "%" else f"-l {size}"
-        window, pane, tty = TmuxCommand.split_pane(
-            pane=self.pane, window=self.window, cmd=cmd, options=f"-h {size_opt}"
+        return TmuxCommand.split_pane(
+            pane=self.pane,
+            window=self.window,
+            cmd=cmd,
+            options=f"-h {size_opt}",
+            **kwargs,
         )
-        return Pane(window, pane, tty)
+
+    def write(self, data: str):
+        if self.tty is not None:
+            with open(self.tty, "w") as fo:
+                fo.write(data)
+
+    def set_title(self, title: str):
+        self.write(f"\033]2;{title}\033\\")
+
+    def clear(self):
+        self.write("\x1b[H\x1b[2J")
 
     def close(self):
         TmuxCommand.close_pane(self.pane)
@@ -158,19 +218,25 @@ class CTXer:
     def __init__(self, now: T.Optional[Pane] = None):
         if now is None:
             window, pane, tty = TmuxCommand.get_active_pane()
-            now = Pane(window, pane, tty, is_main=True, clearing=False)
+            now = Pane(window, pane, tty, clearing=False, delete=False)
             __panes__.append(now)
         self.now = now
 
     def select(self, pane: T.Optional[str], window: T.Optional[str] = None) -> CTXer:
         if pane is None:
-            pane = TmuxCommand.get_active_pane()[1]
+            pane_id = TmuxCommand.get_active_pane()[1]
         else:
+            ps = [p for p in __panes__ if p.title == pane]
+            if len(ps) == 1:
+                return CTXer(ps[0])
+
             panes = TmuxCommand.get_pane_idx()
-            pane = panes[pane]
+            pane_id = panes[pane]
+
         if window is None:
             window = TmuxCommand.get_active_pane()[0]
-        p = [p for p in __panes__ if p.window == window and p.pane == pane][0]
+
+        p = [p for p in __panes__ if p.window == window and p.pane == pane_id][0]
         return CTXer(p)
 
     def split(
@@ -181,6 +247,7 @@ class CTXer:
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
         size: str = "50%",
+        title: T.Optional[str] = None,
     ) -> CTXer:
         if pane is None:
             pane = self.now
@@ -198,7 +265,7 @@ class CTXer:
             "left": pane.split_left,
             "right": pane.split_right,
         }
-        new_pane = split_func[direct](cmd=cmd, size=size)
+        new_pane = split_func[direct](cmd=cmd, size=size, title=title)
         new_pane.action = action
         __panes__.append(new_pane)
         return CTXer(new_pane)
@@ -210,8 +277,9 @@ class CTXer:
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
         size: str = "50%",
+        title: T.Optional[str] = None,
     ) -> CTXer:
-        return self.split("above", pane, gdbcmd, excmd, cmd, size)
+        return self.split("above", pane, gdbcmd, excmd, cmd, size, title)
 
     def below(
         self,
@@ -220,8 +288,9 @@ class CTXer:
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
         size: str = "50%",
+        title: T.Optional[str] = None,
     ) -> CTXer:
-        return self.split("below", pane, gdbcmd, excmd, cmd, size)
+        return self.split("below", pane, gdbcmd, excmd, cmd, size, title)
 
     def left(
         self,
@@ -230,8 +299,9 @@ class CTXer:
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
         size: str = "50%",
+        title: T.Optional[str] = None,
     ) -> CTXer:
-        return self.split("left", pane, gdbcmd, excmd, cmd, size)
+        return self.split("left", pane, gdbcmd, excmd, cmd, size, title)
 
     def right(
         self,
@@ -240,26 +310,49 @@ class CTXer:
         excmd: T.Optional[str] = None,
         cmd: T.Optional[str] = None,
         size: str = "50%",
+        title: T.Optional[str] = None,
     ) -> CTXer:
-        return self.split("right", pane, gdbcmd, excmd, cmd, size)
+        return self.split("right", pane, gdbcmd, excmd, cmd, size, title)
+
+    def session(
+        self,
+        name: str,
+        gdbcmd: T.Optional[str] = None,
+        excmd: T.Optional[str] = None,
+        cmd: T.Optional[str] = None,
+        delete: bool = True,
+        title: T.Optional[str] = None,
+    ) -> CTXer:
+        if gdbcmd is not None:
+            action = GdbCommandAction(gdbcmd)
+        elif excmd is not None:
+            action = ExternalCommandAction(excmd)
+        else:
+            action = None
+
+        new_pane = TmuxCommand.get_session(
+            session=name, cmd=cmd, delete=delete, title=title
+        )
+        new_pane.action = action
+        __panes__.append(new_pane)
+        return CTXer(new_pane)
 
     def update(self, event):
         for pane in __panes__:
             if pane.action is None or pane.tty is None or not os.path.exists(pane.tty):
                 continue
             output = pane.action.do()
-            with open(pane.tty, "w") as fo:
-                if pane.clearing:
-                    fo.write("\x1b[H\x1b[2J")
-                fo.write(output.rstrip())
+            if pane.clearing:
+                pane.clear()
+            pane.write(output)
 
     def clean(self, event):
         global __panes__
         for pane in __panes__:
-            if pane.is_main:
+            if not pane.delete:
                 continue
             pane.close()
-        __panes__ = [p for p in __panes__ if p.is_main]
+        __panes__ = [p for p in __panes__ if not p.delete]
 
     def build(self):
         global __ctxer__
