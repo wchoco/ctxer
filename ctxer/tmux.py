@@ -391,8 +391,14 @@ class PaneCommand(gdb.Command):
         )
         p_add.add_argument("pane", nargs="?")
 
+        p_output = sp.add_parser("output")
+        p_output.set_defaults(func=self.output_command)
+        p_output.add_argument("pane")
+        p_output.add_argument("command", nargs=argparse.REMAINDER)
+
         p_set = sp.add_parser("set")
         p_set.set_defaults(func=self.set_command)
+        p_set.add_argument("--no-clearing", "-n", action="store_true")
         p_set.add_argument("pane")
         p_set.add_argument("command", nargs=argparse.REMAINDER)
 
@@ -426,10 +432,23 @@ class PaneCommand(gdb.Command):
         }
         split_func[args.direct]()
 
+    def output_command(self, args: argparse.Namespace):
+        if __ctxer__ is None:
+            raise ValueError(f"CTXer is not used")
+        pane = __ctxer__.select(pane=args.pane)
+        cmd = " ".join(args.command)
+        if cmd.startswith("!"):
+            action = ExternalCommandAction(cmd[1:])
+        else:
+            action = GdbCommandAction(cmd)
+        output = action.do()
+        pane.now.write(output)
+
     def set_command(self, args: argparse.Namespace):
         if __ctxer__ is None:
             raise ValueError(f"CTXer is not used")
         pane = __ctxer__.select(pane=args.pane)
+        pane.now.clearing = not args.no_clearing
         cmd = " ".join(args.command)
         if cmd.startswith("!"):
             pane.now.action = ExternalCommandAction(cmd[1:])
